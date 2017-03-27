@@ -1,0 +1,15 @@
+[package]
+name = "concourse-bintray-resources"
+version = "0.1.0"
+authors = ["Jean-Sébastien Pédron <jean-sebastien.pedron@dumbbell.fr>"]
+
+[dependencies]
+bintray = { path = "../bintray-rs" }
+clap = "2.22"
+env_logger = "0.4"
+glob = "0.2"
+log = "0.3"
+regex = "0.2"
+serde = "0.9"
+serde_derive = "0.9"
+serde_json = "0.9"
