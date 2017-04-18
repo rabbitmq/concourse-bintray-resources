@@ -650,14 +650,16 @@ fn update_package(props: Option<PackagePropsOutParams>,
             true  => {
                 let _ = writeln!(&mut std::io::stderr(),
                 "\x1b[32mUpdate package record:\x1b[0m {}", package);
-                package.update(&client).or_else(error_out_closure)
+                package.update(client).or_else(error_out_closure)
             }
             false => {
                 let _ = writeln!(&mut std::io::stderr(),
                 "\x1b[32mCreate package record:\x1b[0m {}", package);
-                package.create(&client).or_else(error_out_closure)
+                package.create(client).or_else(error_out_closure)
             },
         };
+
+        let _ = package.get(false, client);
     } else {
         let _ = writeln!(&mut std::io::stderr(),
         "Package record {} up-to-date", package);
@@ -711,16 +713,16 @@ fn update_version(props: Option<VersionPropsOutParams>,
             true  => {
                 let _ = writeln!(&mut std::io::stderr(),
                 "\x1b[32mCreate version record:\x1b[0m {}", version);
-                version.update(&client).or_else(error_out_closure)
+                version.update(client).or_else(error_out_closure)
             }
             false => {
                 let _ = writeln!(&mut std::io::stderr(),
                 "\x1b[32mCreate version record:\x1b[0m {}", version);
-                version.create(&client).or_else(error_out_closure)
+                version.create(client).or_else(error_out_closure)
             }
         };
 
-        let _ = version.get(false, &client);
+        let _ = version.get(false, client);
     } else {
         let _ = writeln!(&mut std::io::stderr(),
         "Version record {} up-to-date", version);
