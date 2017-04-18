@@ -54,6 +54,23 @@ struct CheckVersion {
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
+struct InInput {
+    source: Source,
+    version: Option<CheckVersion>,
+    params: InParams,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct InParams {
+    local_path: Option<StringOrFile>,
+    remote_path: Option<StringOrFile>,
+    filter: Option<StringVecOrFile>,
+    version: StringOrFile,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct OutInput {
     source: Source,
     params: OutParams,
@@ -212,6 +229,7 @@ fn check() {
     let mut package = Package::new(&input.source.subject,
                                    &input.source.repository,
                                    &input.source.package);
+
     match package.get(false, &client) {
         Ok(()) => { }
         Err(e) => { error_out(&e) }
@@ -255,10 +273,64 @@ fn get_check_result(package: &Package,
 // -------------------------------------------------------------------
 
 fn in_() {
-    let _ = writeln!(
-        &mut std::io::stderr(),
-        "\x1b[31mThis resource can't be an input\x1b[0m");
-    std::process::exit(69);
+    /* Read and parse JSON from stdin. */
+    let mut input = String::new();
+    {
+        let stdin = io::stdin();
+        let mut stdin_handle = stdin.lock();
+        stdin_handle.read_to_string(&mut input)
+            .unwrap_or_else(|e| error_out(&BintrayError::from(e)));
+        info!("Input:\n{}", utils::prettify_json(&input));
+    }
+
+    let input: InInput = match serde_json::from_str(&input) {
+        Ok(i)  => { i }
+        Err(e) => { error_out(&BintrayError::Json(e)); }
+    };
+
+    let client = BintrayClient::new(
+        Some(input.source.username),
+        Some(input.source.api_key));
+
+    let mut package = Package::new(&input.source.subject,
+                                   &input.source.repository,
+                                   &input.source.package);
+
+    match package.get(false, &client) {
+        Ok(()) => { }
+        Err(e) => { error_out(&e) }
+    }
+
+    // Create or update version properties with input params.
+    let version_string = match input.version {
+        Some(version) => version.version,
+        None => {
+            package.get_latest_version(Some(&client))
+                .unwrap_or_else(|| error_out(&io::Error::new(
+                    io::ErrorKind::NotFound,
+                    format!("The package {} has no version",
+                            package))))
+                .version
+        }
+    };
+    let mut version = Version::new(&input.source.subject,
+                                   &input.source.repository,
+                                   &input.source.package,
+                                   &version_string);
+
+    match version.get(false, &client) {
+        Ok(()) => { }
+        Err(e) => { error_out(&e) }
+    }
+
+    // TODO: Download files.
+
+    // Print the result as JSON on stdout.
+    let result = get_out_result(&version);
+    match serde_json::to_string_pretty(&result) {
+        Ok(output) => { println!("{}", output); }
+        Err(e)     => { error_out(&BintrayError::Json(e)); }
+    };
 }
 
 // -------------------------------------------------------------------

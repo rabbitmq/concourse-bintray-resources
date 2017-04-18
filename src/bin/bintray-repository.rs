@@ -44,6 +44,14 @@ struct CheckVersion {
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
+struct InInput {
+    source: Source,
+    version: Option<CheckVersion>,
+    params: Option<serde_json::Value> // TODO: Be more restrictive.
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct OutInput {
     source: Source,
     params: OutParams,
@@ -163,6 +171,7 @@ fn check() {
 
     let mut repo = Repository::new(&input.source.subject,
                                    &input.source.repository);
+
     match repo.get(&client) {
         Ok(()) => { }
         Err(e) => { error_out(&e) }
@@ -188,10 +197,48 @@ fn get_check_result(repo: &Repository) -> Vec<CheckVersion> {
 // -------------------------------------------------------------------
 
 fn in_() {
-    let _ = writeln!(
-        &mut std::io::stderr(),
-        "\x1b[31mThis resource can't be an input\x1b[0m");
-    std::process::exit(69);
+    /* Read and parse JSON from stdin. */
+    let mut input = String::new();
+    {
+        let stdin = io::stdin();
+        let mut stdin_handle = stdin.lock();
+        stdin_handle.read_to_string(&mut input)
+            .unwrap_or_else(|e| error_out(&BintrayError::from(e)));
+        info!("Input:\n{}", utils::prettify_json(&input));
+    }
+
+    let input: InInput = match serde_json::from_str(&input) {
+        Ok(i)  => { i }
+        Err(e) => { error_out(&BintrayError::Json(e)); }
+    };
+
+    let client = BintrayClient::new(
+        Some(input.source.username),
+        Some(input.source.api_key));
+
+    let mut repo = Repository::new(&input.source.subject,
+                                   &input.source.repository);
+
+    match repo.get(&client) {
+        Ok(()) => { }
+        Err(e) => { error_out(&e) }
+    }
+
+    if repo.type_ != input.source.repository_type {
+        error_out(&io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!(concat!(
+                        "The repository type from the confiuration ({}) ",
+                        "doesn't match the existing repository type ({})"),
+                        input.source.repository_type, repo.type_)));
+    }
+
+    // Print the result as JSON on stdout.
+    let result = get_out_result(&repo);
+    match serde_json::to_string_pretty(&result) {
+        Ok(output) => { println!("{}", output); }
+        Err(e)     => { error_out(&BintrayError::Json(e)); }
+    };
 }
 
 // -------------------------------------------------------------------
