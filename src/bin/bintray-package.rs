@@ -402,10 +402,10 @@ fn out() {
                            &client);
 
     // Create or update version properties with input params.
-    let version = update_version(input.params.version_props,
-                                 &input.source,
-                                 &version_string,
-                                 &client);
+    let mut version = update_version(input.params.version_props,
+                                     &input.source,
+                                     &version_string,
+                                     &client);
 
     let mut old_files = version.list_files(true, &client)
         .unwrap_or_else(|e| error_out(&e));
@@ -506,6 +506,9 @@ fn out() {
             })
             .collect::<Vec<_>>();
     }
+
+    // Update version informations after files were uploaded and published.
+    let _ = version.get(false, &client);
 
     // Print the result as JSON on stdout.
     let result = get_out_result(&version);
