@@ -313,7 +313,7 @@ fn out() {
         repo.yum_metadata_depth = input.params.yum_metadata_depth;
     }
 
-    if repo != initial_repo {
+    if !exists || repo != initial_repo {
         let error_out_closure = |e| -> Result<(), ()> { error_out(&e); };
 
         let _ = match exists {

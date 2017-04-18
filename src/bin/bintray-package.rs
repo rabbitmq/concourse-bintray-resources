@@ -643,7 +643,7 @@ fn update_package(props: Option<PackagePropsOutParams>,
         None => { }
     }
 
-    if package != initial_package {
+    if !exists || package != initial_package {
         let error_out_closure = |e| -> Result<(), ()> { error_out(&e); };
 
         let _ = match exists {
@@ -710,7 +710,7 @@ fn update_version(props: Option<VersionPropsOutParams>,
         None => { }
     }
 
-    if version != initial_version {
+    if !exists || version != initial_version {
         let error_out_closure = |e| -> Result<(), ()> { error_out(&e); };
 
         let _ = match exists {
