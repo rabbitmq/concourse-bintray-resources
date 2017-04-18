@@ -663,12 +663,6 @@ fn update_package(props: Option<PackagePropsOutParams>,
         "Package record {} up-to-date", package);
     }
 
-    let _ = package.list_files(None, true, client)
-        .unwrap_or_else(|e| error_out(&e))
-        .iter()
-        .map(|f| { println!("- {}", f.path.display()); })
-        .collect::<Vec<_>>();
-
     package
 }
 
