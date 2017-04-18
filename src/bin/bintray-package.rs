@@ -57,7 +57,7 @@ struct CheckVersion {
 struct InInput {
     source: Source,
     version: Option<CheckVersion>,
-    params: InParams,
+    params: Option<InParams>,
 }
 
 #[derive(Debug, Deserialize)]
