@@ -189,6 +189,14 @@ fn main() {
         .map(String::from)
         .expect("Failed to determine program name");
 
+    match matches.value_of("WORKING DIR") {
+        Some(path) => {
+            env::set_current_dir(&path)
+                .unwrap_or_else(|e| error_out(&BintrayError::from(e)));
+        }
+        None => { }
+    }
+
     match matches.value_of("script").unwrap_or(program_name.as_ref()) {
         "check" => check(),
         "out"   => out(),
