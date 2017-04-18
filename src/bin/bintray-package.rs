@@ -472,7 +472,7 @@ fn out() {
                 .unwrap_or_else(|e| error_out(&e));
 
             if remaining_files > 0 {
-                thread::sleep(time::Duration::from_secs(30));
+                thread::sleep(time::Duration::from_secs(10));
             }
         }
     }
@@ -484,21 +484,24 @@ fn out() {
     if publish && show_in_download_list {
         let _ = writeln!(&mut std::io::stderr(),
         "\x1b[32mShow in download list...\x1b[0m");
+
+        // Even if the "publish version" request above returned there is
+        // no more files to publish for the version, files may not be
+        // published yet at the package level. Therefore we might get
+        // a Bad Request error from the API (NotFound from the crate).
+        // If this happens, we retry 10 seconds later. But because this
+        // often fails we also sleep 10 seconds before sending the first
+        // attempt.
+        thread::sleep(time::Duration::from_secs(10));
+
         let _ = files.iter()
             .map(|ref f| {
                 loop {
-                    // Even if the "publish version" request above
-                    // returned there is no more files to publish for
-                    // the version, files may not be published yet at
-                    // the package level. Therefore we might get a Bad
-                    // Request error from the API (NotFound from the
-                    // crate). If this happens, we retry 30 seconds
-                    // later.
                     match f.show_in_download_list(true, &client) {
                         Ok(_) => { break; }
                         Err(BintrayError::Io(ref e))
                         if e.kind() == io::ErrorKind::NotFound => {
-                            thread::sleep(time::Duration::from_secs(30));
+                            thread::sleep(time::Duration::from_secs(10));
                         }
                         Err(e) => { error_out(&e); }
                     }
