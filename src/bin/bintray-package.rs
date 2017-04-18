@@ -434,7 +434,7 @@ fn out() {
     let files = files.iter()
         .map(|filename| upload_file(&filename,
                                     &remote_path,
-                                    true, //publish,
+                                    publish,
                                     override_,
                                     gpg_passphrase,
                                     &debian_architecture,
