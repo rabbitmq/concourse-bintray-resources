@@ -15,7 +15,7 @@ use bintray::file::Content;
 use bintray::utils;
 use clap::{App, Arg};
 use glob::glob;
-use regex::Regex;
+use regex::{Regex, NoExpand};
 use std::borrow::Borrow;
 use std::env;
 use std::ffi::OsStr;
@@ -364,11 +364,8 @@ fn out() {
     // Find all files to include in the package/version.
     let local_path = input.params.local_path
         .map_or(String::new(), |v| from_string_or_file(&v));
-    let remote_path = input.params.remote_path
-        .map_or(String::new(), |v| from_string_or_file(&v));
     let _ = writeln!(&mut std::io::stderr(),
-        "\x1b[32mFrom:\x1b[0m {}\n  \x1b[32mTo:\x1b[0m {}\n",
-        local_path, remote_path);
+        "\x1b[32mLocal path:\x1b[0m\n    {}\n", local_path);
 
     if ! local_path.is_empty() {
         env::set_current_dir(&local_path)
@@ -377,6 +374,13 @@ fn out() {
 
     let files = find_files(input.params.filter);
     let version_string = determine_version(input.params.version, &files);
+
+    let re = Regex::new(r"\$VERSION\b").unwrap();
+    let remote_path = input.params.remote_path
+        .map_or(String::new(), |v| from_string_or_file(&v));
+    let remote_path = re.replace_all(&remote_path, NoExpand(&version_string));
+    let _ = writeln!(&mut std::io::stderr(),
+        "\x1b[32mRemote path:\x1b[0m\n    {}\n", remote_path);
 
     let client = BintrayClient::new(
         Some(input.source.username.clone()),
