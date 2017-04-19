@@ -537,7 +537,8 @@ fn find_files(filter: Option<StringVecOrFile>) -> Vec<PathBuf> {
         })
         .map(|glob_result| {
             glob_result.unwrap_or_else(|e| { error_out(&e); })
-        }));
+        })
+        .filter(|p| p.is_file()));
 
     let _ = writeln!(&mut std::io::stderr(),
         "\x1b[32mFiles:\x1b[0m");
