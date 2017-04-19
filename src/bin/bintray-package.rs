@@ -527,7 +527,7 @@ fn out() {
 
 fn find_files(filter: Option<StringVecOrFile>) -> Vec<PathBuf> {
     let globs = filter.map_or(
-        vec![String::from("**")],
+        vec![String::from("**/*")],
         |v| from_string_vec_or_file(&v));
 
     let mut result = vec![];
