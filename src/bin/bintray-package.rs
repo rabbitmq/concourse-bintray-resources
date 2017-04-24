@@ -11,15 +11,15 @@ use bintray::client::{BintrayClient, BintrayError};
 use bintray::repository::Repository;
 use bintray::package::{Package, PackageMaturity};
 use bintray::version::Version;
-use bintray::file::Content;
+use bintray::content::{self, Content};
 use bintray::utils;
 use clap::{App, Arg};
-use glob::glob;
+use glob::{glob, Pattern};
 use regex::{Regex, NoExpand};
 use std::borrow::Borrow;
 use std::env;
 use std::ffi::OsStr;
-use std::fs::File;
+use std::fs::{self, File};
 use std::io::{self, BufReader, BufRead, Read, Write};
 use std::path::{Path, PathBuf};
 use std::{thread, time};
@@ -66,7 +66,6 @@ struct InParams {
     local_path: Option<StringOrFile>,
     remote_path: Option<StringOrFile>,
     filter: Option<StringVecOrFile>,
-    version: StringOrFile,
 }
 
 #[derive(Debug, Deserialize)]
@@ -295,6 +294,23 @@ fn in_() {
         Ok(i)  => { i }
         Err(e) => { error_out(&BintrayError::Json(e)); }
     };
+    let params = input.params.unwrap_or(InParams {
+        local_path: None,
+        remote_path: None,
+        filter: None,
+    });
+
+    let local_path = params.local_path
+        .map_or(String::new(), |v| from_string_or_file(&v));
+    let _ = writeln!(&mut std::io::stderr(),
+        "\x1b[32mLocal path:\x1b[0m\n    {}\n", local_path);
+
+    if ! local_path.is_empty() {
+        fs::create_dir_all(&local_path)
+            .unwrap_or_else(|e| error_out(&BintrayError::from(e)));
+        env::set_current_dir(&local_path)
+            .unwrap_or_else(|e| error_out(&BintrayError::from(e)));
+    }
 
     let client = BintrayClient::new(
         Some(input.source.username),
@@ -331,7 +347,24 @@ fn in_() {
         Err(e) => { error_out(&e) }
     }
 
-    // TODO: Download files.
+    let re = Regex::new(r"\$VERSION\b").unwrap();
+    let remote_path = params.remote_path
+        .map_or(String::new(), |v| from_string_or_file(&v));
+    let remote_path = re.replace_all(&remote_path, NoExpand(&version_string));
+    let remote_path = content::clean_path(
+        &PathBuf::from(remote_path.into_owned()));
+    let _ = writeln!(&mut std::io::stderr(),
+        "\x1b[32mRemote path:\x1b[0m\n    {}\n", remote_path.display());
+
+    // Download files.
+    let globs = params.filter.map_or(
+        vec![String::from("**/*")],
+        |v| from_string_vec_or_file(&v));
+    let files = version.list_files(true, &client)
+        .unwrap_or_else(|e| error_out(&e));
+    files.iter()
+        .filter(|f| does_file_match_globs(&f, &remote_path, &globs))
+        .fold((), |acc, f| { download_file(&f, &remote_path, &client); acc });
 
     // Print the result as JSON on stdout.
     let result = get_out_result(&version);
@@ -339,6 +372,53 @@ fn in_() {
         Ok(output) => { println!("{}", output); }
         Err(e)     => { error_out(&BintrayError::Json(e)); }
     };
+}
+
+fn does_file_match_globs<T: Borrow<str>>(content: &Content,
+                                         remote_path: &PathBuf,
+                                         globs: &[T])
+    -> bool
+{
+    match filename_relative_to(content, remote_path) {
+        Some(filename) => {
+            let filename = String::from(filename.to_string_lossy());
+            globs.iter()
+                .any(|g| {
+                    let pattern = Pattern::new(g.borrow())
+                        .unwrap_or_else(|e| error_out(&e));
+                    pattern.matches(&filename)
+                })
+        },
+        None => false,
+    }
+}
+
+fn filename_relative_to<T: AsRef<Path>>(content: &Content, remote_path: T)
+    -> Option<PathBuf>
+{
+    match content.path.strip_prefix(remote_path.as_ref()) {
+        Ok(filename) => Some(PathBuf::from(filename)),
+        Err(_)       => None,
+    }
+}
+
+fn download_file<T: AsRef<Path>>(content: &Content,
+                                 remote_path: T,
+                                 client: &BintrayClient)
+{
+    let filename = filename_relative_to(content, remote_path).unwrap();
+
+    let _ = writeln!(&mut std::io::stderr(),
+        "\x1b[32mDownload file:\x1b[0m {}", filename.display());
+    match filename.parent() {
+        Some(parent) => {
+            fs::create_dir_all(&parent)
+                .unwrap_or_else(|e| error_out(&BintrayError::from(e)));
+        }
+        None => { }
+    }
+    content.download(&filename, client)
+        .unwrap_or_else(|e| error_out(&e));
 }
 
 // -------------------------------------------------------------------
