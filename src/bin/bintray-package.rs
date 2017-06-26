@@ -95,6 +95,8 @@ struct OutParams {
     debian_component: Option<StringVecOrFile>,
 
     show_in_download_list: Option<bool>,
+
+    keep_existing_files: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -529,21 +531,27 @@ fn out() {
         .collect::<Vec<Content>>();
     let _ = writeln!(&mut std::io::stderr(), "");
 
-    // Remove files which shouldn't be part of the version anymore.
-    old_files.retain(|ref remote| {
-        !files.iter().any(|ref local| {
-            let mut abs_remote = PathBuf::from("/");
-            abs_remote.push(&remote.path);
-            let mut abs_local = PathBuf::from("/");
-            abs_local.push(&local.path);
-            abs_remote == abs_local
-        })
-    });
-    if old_files.len() > 0 {
-        let _ = old_files.iter().fold((), |_, ref f| {
-            remove_file(&f, &client);
+    let keep_existing_files = match input.params.keep_existing_files {
+        Some(v) => v,
+        None    => false,
+    };
+    if ! keep_existing_files {
+        // Remove files which shouldn't be part of the version anymore.
+        old_files.retain(|ref remote| {
+            !files.iter().any(|ref local| {
+                let mut abs_remote = PathBuf::from("/");
+                abs_remote.push(&remote.path);
+                let mut abs_local = PathBuf::from("/");
+                abs_local.push(&local.path);
+                abs_remote == abs_local
+            })
         });
-        let _ = writeln!(&mut std::io::stderr(), "");
+        if old_files.len() > 0 {
+            let _ = old_files.iter().fold((), |_, ref f| {
+                remove_file(&f, &client);
+            });
+            let _ = writeln!(&mut std::io::stderr(), "");
+        }
     }
 
     if publish {
