@@ -35,6 +35,7 @@ struct Source {
     repository: String,
     package: String,
     gpg_passphrase: Option<String>,
+    version_filter: Option<StringVecOrFile>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -245,7 +246,7 @@ fn check() {
     }
 
     // Print the result as JSON on stdout.
-    let result = get_check_result(&package, input.version, &client);
+    let result = get_check_result(&package, input.version, input.source.version_filter, &client);
     match serde_json::to_string_pretty(&result) {
         Ok(output) => { println!("{}", output); }
         Err(e)     => { error_out(&BintrayError::Json(e)); }
@@ -254,27 +255,50 @@ fn check() {
 
 fn get_check_result(package: &Package,
                     version: Option<CheckVersion>,
+                    version_filter: Option<StringVecOrFile>,
                     client: &BintrayClient)
     -> Vec<CheckVersion>
 {
-    let versions = match version {
-        Some(version) => {
-            package.get_versions_starting_at(
-                &Some(version.version),
-                Some(client))
+    let only_last = version.is_none();
+    let mut filtered_versions = filter_matching_versions(
+        package.get_versions_starting_at(&version.map(|v| v.version), Some(client)),
+        version_filter
+    );
+    if only_last {
+        match filtered_versions.pop() {
+            None => vec![],
+            Some(v) => vec![v]
         }
-        None => {
-            match package.get_latest_version(Some(client)) {
-                Some(version) => vec![version],
-                None          => vec![]
-            }
-        }
-    };
+    }
+    else {
+        filtered_versions
+    }
+}
+
+fn filter_matching_versions(versions: Vec<Version>, version_filter: Option<StringVecOrFile>)
+    -> Vec<CheckVersion>
+{
+
+    let globs = version_filter.map_or(
+        vec![String::from("*")],
+        |v| from_string_vec_or_file(&v));
 
     versions
         .iter()
+        .filter(|v| version_match_globs(&v, &globs))
         .map(version_for_concourse)
         .collect()
+}
+
+fn version_match_globs<T: Borrow<str>>(version: &Version, globs: &[T]) -> bool
+{
+    let version_string = &version.version;
+    globs.iter()
+        .any(|g| {
+            let pattern = Pattern::new(g.borrow())
+                .unwrap_or_else(|e| error_out(&e));
+            pattern.matches(&version_string)
+        })
 }
 
 // -------------------------------------------------------------------
