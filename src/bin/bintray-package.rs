@@ -330,16 +330,30 @@ fn in_() {
         filter: None,
     });
 
-    let local_path = params.local_path
-        .map_or(String::new(), |v| from_string_or_file(&v));
-    let _ = writeln!(&mut std::io::stderr(),
-        "\x1b[32mLocal path:\x1b[0m\n    {}\n", local_path);
+    /* We use version "<DELETED>" as a special version after a version or
+     * a package was deleted in `out`. */
+    match input.version.as_ref() {
+        Some(version) => {
+            if version.version == "<DELETED>" {
+                let _ = writeln!(&mut std::io::stderr(),
+                    "Getting special version {} is a no-op; returning it as is",
+                    version.version);
 
-    if ! local_path.is_empty() {
-        fs::create_dir_all(&local_path)
-            .unwrap_or_else(|e| error_out(&BintrayError::from(e)));
-        env::set_current_dir(&local_path)
-            .unwrap_or_else(|e| error_out(&BintrayError::from(e)));
+                let result = OutResult {
+                    version: CheckVersion {
+                        version: String::from("<DELETED>"),
+                        updated: None,
+                    },
+                    metadata: vec![],
+                };
+                let output = serde_json::to_string_pretty(&result)
+                    .expect("Failed to convert <DELETED> version to JSON");
+
+                println!("{}", output);
+                return;
+            }
+        }
+        None => {}
     }
 
     let client = BintrayClient::new(
@@ -375,6 +389,18 @@ fn in_() {
     match version.get(false, &client) {
         Ok(()) => { }
         Err(e) => { error_out(&e) }
+    }
+
+    let local_path = params.local_path
+        .map_or(String::new(), |v| from_string_or_file(&v));
+    let _ = writeln!(&mut std::io::stderr(),
+        "\x1b[32mLocal path:\x1b[0m\n    {}\n", local_path);
+
+    if ! local_path.is_empty() {
+        fs::create_dir_all(&local_path)
+            .unwrap_or_else(|e| error_out(&BintrayError::from(e)));
+        env::set_current_dir(&local_path)
+            .unwrap_or_else(|e| error_out(&BintrayError::from(e)));
     }
 
     let re = Regex::new(r"\$VERSION\b").unwrap();
