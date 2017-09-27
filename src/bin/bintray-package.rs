@@ -117,6 +117,8 @@ struct PackagePropsOutParams {
     vcs_url: Option<StringOrFile>,
     github_repo: Option<StringOrFile>,
     github_release_notes_file: Option<StringOrFile>,
+
+    delete: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -128,6 +130,8 @@ struct VersionPropsOutParams {
     vcs_tag: Option<StringOrFile>,
     github_release_notes_file: Option<StringOrFile>,
     github_use_tag_release_notes: Option<bool>,
+
+    delete: Option<bool>,
 }
 
 #[derive(Serialize)]
@@ -467,7 +471,35 @@ fn out() {
         Err(e) => { error_out(&BintrayError::Json(e)); }
     };
 
-    // Find all files to include in the package/version.
+    let client = BintrayClient::new(
+        Some(input.source.username.clone()),
+        Some(input.source.api_key.clone()));
+
+    let delete_package = match input.params.package_props.as_ref() {
+        Some(v) => match v.delete {
+            Some(f) => f,
+            None    => false,
+        },
+        None => false,
+    };
+    let delete_version = match input.params.version_props.as_ref() {
+        Some(v) => match v.delete {
+            Some(f) => f,
+            None    => false,
+        },
+        None => false,
+    };
+
+    if delete_package || delete_version {
+        out_delete(client, input, delete_package);
+    } else {
+        out_publish(client, input);
+    }
+}
+
+fn out_publish(client: BintrayClient, input: OutInput)
+{
+    // Enter local_path, if one was specified.
     let local_path = input.params.local_path
         .map_or(String::new(), |v| from_string_or_file(&v));
     let _ = writeln!(&mut std::io::stderr(),
@@ -477,20 +509,6 @@ fn out() {
         env::set_current_dir(&local_path)
             .unwrap_or_else(|e| error_out(&BintrayError::from(e)));
     }
-
-    let files = find_files(input.params.filter);
-    let version_string = determine_version(input.params.version, &files);
-
-    let re = Regex::new(r"\$VERSION\b").unwrap();
-    let remote_path = input.params.remote_path
-        .map_or(String::new(), |v| from_string_or_file(&v));
-    let remote_path = re.replace_all(&remote_path, NoExpand(&version_string));
-    let _ = writeln!(&mut std::io::stderr(),
-        "\x1b[32mRemote path:\x1b[0m\n    {}\n", remote_path);
-
-    let client = BintrayClient::new(
-        Some(input.source.username.clone()),
-        Some(input.source.api_key.clone()));
 
     let mut repo = Repository::new(&input.source.subject,
                                    &input.source.repository);
@@ -510,6 +528,10 @@ fn out() {
     let _ = update_package(input.params.package_props,
                            &input.source,
                            &client);
+
+    // Find all files to include in the package/version.
+    let files = find_files(input.params.filter);
+    let version_string = determine_version(input.params.version, &files);
 
     // Create or update version properties with input params.
     let mut version = update_version(input.params.version_props,
@@ -540,6 +562,13 @@ fn out() {
     let debian_component = input.params.debian_component
         .map(|v| from_string_vec_or_file(&v))
         .unwrap_or(vec![]);
+
+    let re = Regex::new(r"\$VERSION\b").unwrap();
+    let remote_path = input.params.remote_path
+        .map_or(String::new(), |v| from_string_or_file(&v));
+    let remote_path = re.replace_all(&remote_path, NoExpand(&version_string));
+    let _ = writeln!(&mut std::io::stderr(),
+        "\x1b[32mRemote path:\x1b[0m\n    {}\n", remote_path);
 
     let files = files.iter()
         .map(|filename| upload_file(&filename,
@@ -635,6 +664,76 @@ fn out() {
         Ok(output) => { println!("{}", output); }
         Err(e)     => { error_out(&BintrayError::Json(e)); }
     };
+}
+
+fn out_delete(client: BintrayClient, input: OutInput,
+              delete_package: bool)
+{
+    let result = OutResult {
+        version: CheckVersion {
+            version: String::from("<DELETED>"),
+            updated: None,
+        },
+        metadata: vec![],
+    };
+    let output = serde_json::to_string_pretty(&result)
+        .expect("Failed to convert <DELETED> version to JSON");
+
+    let mut package = Package::new(&input.source.subject,
+                                   &input.source.repository,
+                                   &input.source.package);
+
+    match package.exists(&client) {
+        Ok(true) => {}
+        Ok(false) => {
+            println!("{}", output);
+            return;
+        }
+        Err(e) => { error_out(&e); }
+    }
+
+    if delete_package {
+        let _ = writeln!(&mut std::io::stderr(),
+            "\x1b[33mRemoving package: {} \x1b[0m", package.package);
+
+        match package.delete(&client) {
+            Ok(warning) => log_bintray_warning(warning),
+            Err(e)      => error_out(&e),
+        }
+
+        println!("{}", output);
+        return;
+    }
+
+    let re_string = from_string_or_file(&input.params.version);
+    let _ = writeln!(&mut std::io::stderr(),
+        "\x1b[32mVersion regex:\x1b[0m\n    {}\n", re_string);
+
+    let re = Regex::new(&re_string)
+        .unwrap_or_else(|e| error_out(&e));
+
+    for version_string in package.versions.iter() {
+        if re.is_match(&version_string) {
+            let _ = writeln!(&mut std::io::stderr(),
+                "\x1b[33mRemoving version: {} \x1b[0m", version_string);
+
+            let version = Version::new(&input.source.subject,
+                                       &input.source.repository,
+                                       &input.source.package,
+                                       &version_string);
+            match version.delete(&client) {
+                Ok(warning) => {
+                    log_bintray_warning(warning);
+                }
+                Err(e) => { error_out(&e); }
+            }
+        } else {
+            let _ = writeln!(&mut std::io::stderr(),
+                " Keeping version: {}", version_string);
+        }
+    }
+
+    println!("{}", output);
 }
 
 fn find_files(filter: Option<StringVecOrFile>) -> Vec<PathBuf> {
