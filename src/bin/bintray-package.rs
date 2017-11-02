@@ -246,6 +246,8 @@ fn check() {
 
     match package.get(false, &client) {
         Ok(()) => { }
+        Err(BintrayError::Io(ref e))
+            if e.kind() == io::ErrorKind::NotFound => { }
         Err(e) => { error_out(&e) }
     }
 
