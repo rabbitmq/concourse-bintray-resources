@@ -1,6 +1,6 @@
 [package]
 name = "concourse-bintray-resources"
-version = "0.7.3"
+version = "0.8.0"
 authors = ["Jean-Sébastien Pédron <jean-sebastien.pedron@dumbbell.fr>"]
 
 [dependencies]
