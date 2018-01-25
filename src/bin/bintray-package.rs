@@ -132,6 +132,7 @@ struct VersionPropsOutParams {
     github_use_tag_release_notes: Option<bool>,
 
     delete: Option<bool>,
+    keep_last_n: Option<u64>,
 }
 
 #[derive(Serialize)]
@@ -740,8 +741,15 @@ fn out_delete(client: BintrayClient, input: OutInput,
     let re = Regex::new(&re_string)
         .unwrap_or_else(|e| error_out(&e));
 
+    let mut keep_last_n = match input.params.version_props.as_ref() {
+        Some(v) => v.keep_last_n.unwrap_or(0),
+        None    => 0,
+    };
+
+    /* FIXME: Versions should be sorted by versions because the order on
+     * Bintray might make no sense in this context. */
     for version_string in package.versions.iter() {
-        if re.is_match(&version_string) {
+        if keep_last_n == 0 && re.is_match(&version_string) {
             let _ = writeln!(&mut std::io::stderr(),
                 "\x1b[33mRemoving version: {} \x1b[0m", version_string);
 
@@ -758,6 +766,10 @@ fn out_delete(client: BintrayClient, input: OutInput,
         } else {
             let _ = writeln!(&mut std::io::stderr(),
                 " Keeping version: {}", version_string);
+
+            if keep_last_n > 0 {
+                keep_last_n = keep_last_n - 1;
+            }
         }
     }
 
