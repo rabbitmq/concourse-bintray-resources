@@ -749,27 +749,30 @@ fn out_delete(client: BintrayClient, input: OutInput,
     /* FIXME: Versions should be sorted by versions because the order on
      * Bintray might make no sense in this context. */
     for version_string in package.versions.iter() {
-        if keep_last_n == 0 && re.is_match(&version_string) {
-            let _ = writeln!(&mut std::io::stderr(),
-                "\x1b[33mRemoving version: {} \x1b[0m", version_string);
+        if re.is_match(&version_string) {
+            if keep_last_n > 0 {
+                let _ = writeln!(&mut std::io::stderr(),
+                    " Keeping version: {}", version_string);
 
-            let version = Version::new(&input.source.subject,
-                                       &input.source.repository,
-                                       &input.source.package,
-                                       &version_string);
-            match version.delete(&client) {
-                Ok(warning) => {
-                    log_bintray_warning(warning);
+                keep_last_n = keep_last_n - 1;
+            } else {
+                let _ = writeln!(&mut std::io::stderr(),
+                    "\x1b[33mRemoving version: {} \x1b[0m", version_string);
+
+                let version = Version::new(&input.source.subject,
+                                           &input.source.repository,
+                                           &input.source.package,
+                                           &version_string);
+                match version.delete(&client) {
+                    Ok(warning) => {
+                        log_bintray_warning(warning);
+                    }
+                    Err(e) => { error_out(&e); }
                 }
-                Err(e) => { error_out(&e); }
             }
         } else {
             let _ = writeln!(&mut std::io::stderr(),
                 " Keeping version: {}", version_string);
-
-            if keep_last_n > 0 {
-                keep_last_n = keep_last_n - 1;
-            }
         }
     }
 
