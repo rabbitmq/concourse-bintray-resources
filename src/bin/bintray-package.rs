@@ -746,8 +746,8 @@ fn out_delete(client: BintrayClient, input: OutInput,
         None    => 0,
     };
 
-    /* FIXME: Versions should be sorted by versions because the order on
-     * Bintray might make no sense in this context. */
+    package.versions.sort();
+    package.versions.reverse();
     for version_string in package.versions.iter() {
         if re.is_match(&version_string) {
             if keep_last_n > 0 {
