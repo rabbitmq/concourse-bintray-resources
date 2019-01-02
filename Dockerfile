@@ -4,8 +4,8 @@ WORKDIR /bintray-resources
 
 COPY . /bintray-resources
 
-RUN cargo build
-
-COPY ./target/debug/bintray-package /opt/resource/
+RUN cargo build && \
+    mkdir -p /opt/resource && \
+    cp target/debug/bintray-package /opt/resource/
 
 COPY ./scripts/* /opt/resource/
