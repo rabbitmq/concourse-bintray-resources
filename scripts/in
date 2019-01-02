@@ -1,0 +1,2 @@
+#!/bin/sh
+/opt/resource/bintray-package --script in $1
