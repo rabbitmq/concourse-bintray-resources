@@ -1,11 +1,17 @@
-FROM rust:1.31.1-slim
+FROM ekidd/rust-musl-builder AS builder
 
 WORKDIR /bintray-resources
 
 COPY . /bintray-resources
 
-RUN cargo build && \
-    mkdir -p /opt/resource && \
-    cp target/debug/bintray-package /opt/resource/
+# Fix permissions on source code.
+RUN sudo chown -R rust:rust /bintray-resources
 
-COPY ./scripts/* /opt/resource/
+RUN cargo build --release --target x86_64-unknown-linux-musl
+
+FROM watawuwu/openssl:latest
+
+RUN mkdir -p /opt/resource
+
+COPY --from=builder /bintray-resources/target/x86_64-unknown-linux-musl/release/bintray-package /opt/resource/
+COPY --from=builder /bintray-resources/assets/* /opt/resource/
