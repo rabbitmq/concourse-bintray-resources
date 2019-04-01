@@ -1,0 +1,11 @@
+#!/bin/bash
+set -e
+
+destination=$1
+
+if [ -z "$destination" ]; then
+  echo "usage: $0 <path/to/destination>" >&2
+  exit 1
+fi
+
+/opt/resource/bintray-package --script=out $destination
