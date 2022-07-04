@@ -129,6 +129,6 @@ This script will create a version and upload the package files for this version.
 
 (c) 2017-2022 VMware, Inc. or its affiliates.
 
-This package, the Concourse Cloudsmith Resource, is licensed under the Mozilla Public License 2.0 ("MPL").
+This package, the Concourse Bintray Resource, is licensed under the Mozilla Public License 2.0 ("MPL").
 
 See [LICENSE](./LICENSE).
